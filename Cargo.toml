@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "twinz_core",
+    "twinz_storage",
+    "twinz_transport",
+    "twinz_plugin",
+    "twinz_server",
+]
+
+[workspace.dependencies]
+tokio = { version = "1.43", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+async-trait = "0.1"
+bytes = "1.9"
+crc32fast = "1.4"
+log = "0.4"
+env_logger = "0.11"
+clap = { version = "4.5", features = ["derive"] }
+once_cell = "1.20"
+# Local crates
+twinz_core = { path = "twinz_core" }
+twinz_storage = { path = "twinz_storage" }
+twinz_transport = { path = "twinz_transport" }
+twinz_plugin = { path = "twinz_plugin" }
+
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1

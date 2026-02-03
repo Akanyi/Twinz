@@ -1,0 +1,11 @@
+[package]
+name = "twinz_transport"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+log = { workspace = true }
+async-trait = { workspace = true }

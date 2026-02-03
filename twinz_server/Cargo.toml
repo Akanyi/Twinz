@@ -1,0 +1,19 @@
+[package]
+name = "twinz_server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+twinz_core = { workspace = true }
+twinz_transport = { workspace = true }
+twinz_storage = { workspace = true }
+twinz_plugin = { workspace = true }
+tokio = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+clap = { workspace = true }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

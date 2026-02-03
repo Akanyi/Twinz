@@ -1,0 +1,12 @@
+[package]
+name = "twinz_storage"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { workspace = true }
+bytes = { workspace = true }
+crc32fast = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+log = { workspace = true }

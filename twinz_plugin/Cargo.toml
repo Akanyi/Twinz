@@ -1,0 +1,12 @@
+[package]
+name = "twinz_plugin"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = { workspace = true }
+bytes = { workspace = true }
+thiserror = { workspace = true }
+twinz_transport = { workspace = true }
+twinz_storage = { workspace = true }
+

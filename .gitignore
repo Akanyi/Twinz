@@ -1,0 +1,7 @@
+/target
+/data
+/data_duck
+/src
+**/*.rs.bk
+*.swp
+*.log
