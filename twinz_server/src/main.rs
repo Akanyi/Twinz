@@ -126,6 +126,10 @@ impl Plugin for SimplePlugin {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 默认开启 info 级别日志，除非环境变量 RUST_LOG 另有指定
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "info");
+    }
     env_logger::init();
     let args = Cli::parse();
 

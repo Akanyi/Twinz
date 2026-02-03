@@ -3,6 +3,10 @@ name = "twinz_server"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "twinz"
+path = "src/main.rs"
+
 [dependencies]
 twinz_core = { workspace = true }
 twinz_transport = { workspace = true }
