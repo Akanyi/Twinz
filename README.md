@@ -71,7 +71,7 @@ graph TD
 
         Plugin -->|Get/Put| Storage[BitCask Storage]
 
-        Storage -->|Read/Write| "Disk[(Data Files)"]
+        Storage -->|Read/Write| Disk[("Data Files")]
         Storage -->|Manage| KeyDir[In-Memory Index]
     end
 ```
