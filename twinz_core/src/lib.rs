@@ -1,7 +1,7 @@
 use log::{error, info};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use twinz_plugin::Plugin;
+// use twinz_plugin::Plugin; // 避免循环，删除
 use twinz_storage::BitCask;
 use twinz_transport::{TwinzAddress, TwinzStream, TwinzTransport};
 pub mod codec;
@@ -10,9 +10,19 @@ pub mod types;
 pub use codec::ValueCodec;
 pub use types::Value;
 
+// 核心 Plugin trait 定义
+#[async_trait::async_trait]
+pub trait Plugin: Send + Sync + 'static {
+    async fn handle_connection(
+        &self,
+        stream: Box<dyn TwinzStream>,
+        storage: Arc<BitCask>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
+}
+
 pub struct Kernel {
     storage: Arc<BitCask>,
-    // 使用 bind 返回的 Box<dyn TwinzListener>。
+    // 监听器句柄
 }
 
 impl Kernel {
@@ -20,15 +30,14 @@ impl Kernel {
         Self { storage }
     }
 
-    pub async fn run<T, P>(
+    pub async fn run<T>(
         &self,
         transport: T,
         address: TwinzAddress,
-        plugin: Arc<P>,
+        plugin: Arc<dyn Plugin>,
     ) -> Result<(), Box<dyn std::error::Error>>
     where
         T: TwinzTransport,
-        P: Plugin,
     {
         info!("Binding to address: {:?}", address);
         let mut listener = transport

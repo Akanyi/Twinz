@@ -55,74 +55,7 @@ enum Commands {
     },
 }
 
-pub struct SimplePlugin;
-
-#[async_trait::async_trait]
-impl Plugin for SimplePlugin {
-    async fn handle_connection(
-        &self,
-        mut stream: Box<dyn TwinzStream>,
-        storage: Arc<BitCask>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // 使用 Duck Typing (Value) 处理
-        // 示例: 客户端发送 "SET", "key", "value" (在数组中)
-        // 使用 Values 实现一个简单的 Echo/Store 循环
-
-        loop {
-            // 读取 Value
-            match ValueCodec::read_value(&mut *stream).await {
-                Ok(Some(value)) => {
-                    info!("Received Duck Value: {:?}", value);
-
-                    // 如果数组 ["SET", k, v] -> 存储
-                    // 如果数组 ["GET", k] -> 获取
-
-                    match value {
-                        Value::Array(ref args) => {
-                            if args.len() >= 3 && args[0].as_str() == Some("SET") {
-                                let key = args[1].to_string_lossy().as_bytes().to_vec();
-                                // 存储 args[2] 的序列化
-                                let val_bytes = serde_json::to_vec(&args[2])?;
-                                storage.put(key, val_bytes).await?;
-                                ValueCodec::write_value(
-                                    &mut *stream,
-                                    &Value::String("OK".to_string()),
-                                )
-                                .await?;
-                            } else if args.len() >= 2 && args[0].as_str() == Some("GET") {
-                                let key = args[1].to_string_lossy().as_bytes().to_vec();
-                                match storage.get(&key).await {
-                                    Ok(val_bytes) => {
-                                        // 尝试反序列化回 Value，否则返回 Bytes
-                                        let val: Value = serde_json::from_slice(&val_bytes)
-                                            .unwrap_or(Value::Bytes(val_bytes));
-                                        ValueCodec::write_value(&mut *stream, &val).await?;
-                                    }
-                                    Err(_) => {
-                                        ValueCodec::write_value(&mut *stream, &Value::Null).await?;
-                                    }
-                                }
-                            } else {
-                                // 回显
-                                ValueCodec::write_value(&mut *stream, &value).await?;
-                            }
-                        }
-                        _ => {
-                            // 回显
-                            ValueCodec::write_value(&mut *stream, &value).await?;
-                        }
-                    }
-                }
-                Ok(None) => break, // EOF
-                Err(e) => {
-                    error!("Connection error: {}", e);
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-}
+// SimplePlugin removed (Moved to twinz_plugin::builtin_kv::TwinzKV)
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -173,10 +106,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // 地址
             let addr = TwinzAddress::Namespace(name);
 
-            // 初始化 Plugin (默认)
-            let plugin = Arc::new(SimplePlugin);
+            // 初始化 PluginManager
+            let mut plugin_manager = twinz_plugin::loader::PluginManager::new();
+
+            // 注册静态加载器 (内置插件)
+            let mut static_loader = twinz_plugin::static_loader::StaticPluginLoader::new();
+
+            // 如果你以后想把 SimplePlugin 删掉，这里就不用引用了。
+            // 现在我们用 TwinzKV (via static_loader) 作为默认插件。
+            let static_loader = Box::new(static_loader);
+            plugin_manager.register_loader(static_loader);
+
+            // 加载默认插件
+            let plugin_name = "kv"; // 或者 "simple"
+            let plugin = plugin_manager
+                .get_plugin(plugin_name)
+                .expect("Failed to load default 'kv' plugin");
 
             // 运行
+            // kernel.run 需要 Arc<P> where P: Plugin.
+            // Box<dyn Plugin> 也是 Plugin吗？ Kernel 定义是 Arc<P>。 P 必须是 Sized?
+            // Kernel run 定义: pub async fn run<T, P>(..., plugin: Arc<P>)
+            // 我们的 plugin 是 Arc<dyn Plugin>.
+            // 所以 P = dyn Plugin.
+            // 只要 dyn Plugin implemented Plugin.
+            // wait, async trait dynamic dispatch issue?
+            // "The trait `Plugin` cannot be made into an object". async_trait 宏会处理这个吗？
+            // async_trait 生成的方法返回 BoxFuture，应该是 Object Safe 的。
+
             kernel.run(transport, addr, plugin).await?;
         }
         Commands::Compact { storage_dir } => {
@@ -195,77 +152,88 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let transport = twinz_transport::windows::TwinzWindowsTransport;
             #[cfg(unix)]
             let transport = twinz_transport::unix::TwinzUnixTransport;
-            // let transport = TwinzTransport::default_windows(); // Error
+
             let addr = TwinzAddress::Namespace(name);
-
             let mut stream = transport.connect(&addr).await?;
-            info!("已连接！发送 Duck Types...");
+            info!("已连接！(输入 'EXIT' 或 'QUIT' 退出)");
 
-            // Test 1: Echo String
-            info!("Sending String...");
-            ValueCodec::write_value(&mut stream, &Value::String("Hello Duck".to_string()))
-                .await
-                .map_err(|e| {
-                    Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        e.to_string(),
-                    )) as Box<dyn std::error::Error>
-                })?;
-            if let Some(resp) = ValueCodec::read_value(&mut stream).await.map_err(|e| {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    e.to_string(),
-                )) as Box<dyn std::error::Error>
-            })? {
-                info!("Response: {:?}", resp);
-            }
+            let mut stdin = tokio::io::BufReader::new(tokio::io::stdin());
+            let mut input_buf = String::new();
 
-            // Test 2: SET ["SET", "foo", "bar"]
-            info!("Sending SET command...");
-            let cmd = Value::Array(vec![
-                Value::String("SET".to_string()),
-                Value::String("foo".to_string()),
-                Value::String("bar".to_string()),
-            ]);
-            ValueCodec::write_value(&mut stream, &cmd)
-                .await
-                .map_err(|e| {
-                    Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        e.to_string(),
-                    )) as Box<dyn std::error::Error>
-                })?;
-            if let Some(resp) = ValueCodec::read_value(&mut stream).await.map_err(|e| {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    e.to_string(),
-                )) as Box<dyn std::error::Error>
-            })? {
-                info!("Response: {:?}", resp);
-            }
+            loop {
+                use tokio::io::AsyncBufReadExt;
+                use tokio::io::AsyncWriteExt;
 
-            // Test 3: GET ["GET", "foo"]
-            info!("Sending GET command...");
-            let cmd = Value::Array(vec![
-                Value::String("GET".to_string()),
-                Value::String("foo".to_string()),
-            ]);
-            ValueCodec::write_value(&mut stream, &cmd)
-                .await
-                .map_err(|e| {
-                    Box::new(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        e.to_string(),
-                    )) as Box<dyn std::error::Error>
-                })?;
+                // 打印提示符 (由于 stdout 缓冲，需要 flush)
+                let mut stdout = tokio::io::stdout();
+                stdout.write_all(b"twinz> ").await?;
+                stdout.flush().await?;
 
-            if let Some(resp) = ValueCodec::read_value(&mut stream).await.map_err(|e| {
-                Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    e.to_string(),
-                )) as Box<dyn std::error::Error>
-            })? {
-                info!("Response: {:?}", resp);
+                input_buf.clear();
+                let bytes_read = stdin.read_line(&mut input_buf).await?;
+                if bytes_read == 0 {
+                    break; // EOF
+                }
+
+                let line = input_buf.trim();
+                if line.is_empty() {
+                    continue;
+                }
+
+                if line.eq_ignore_ascii_case("EXIT") || line.eq_ignore_ascii_case("QUIT") {
+                    println!("Bye!");
+                    break;
+                }
+
+                // 简单的命令解析 (Split by whitespace)
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if parts.is_empty() {
+                    continue;
+                }
+
+                let cmd_str = parts[0].to_uppercase();
+                let cmd_val = match cmd_str.as_str() {
+                    "GET" if parts.len() == 2 => Value::Array(vec![
+                        Value::String("GET".to_string()),
+                        Value::String(parts[1].to_string()),
+                    ]),
+                    "SET" if parts.len() == 3 => Value::Array(vec![
+                        Value::String("SET".to_string()),
+                        Value::String(parts[1].to_string()),
+                        Value::String(parts[2].to_string()),
+                    ]),
+                    "PING" => Value::String("PING".to_string()),
+                    _ => {
+                        // 默认为原始字符串发送，或者尝试构建 Array
+                        // 如果用户输入了 "MYCMD arg1 arg2"，我们转为 ["MYCMD", "arg1", "arg2"]
+                        let mut vec_cmd = Vec::new();
+                        for part in parts {
+                            vec_cmd.push(Value::String(part.to_string()));
+                        }
+                        Value::Array(vec_cmd)
+                    }
+                };
+
+                // 发送请求
+                if let Err(e) = ValueCodec::write_value(&mut stream, &cmd_val).await {
+                    error!("发送失败: {}", e);
+                    break;
+                }
+
+                // 等待响应
+                match ValueCodec::read_value(&mut stream).await {
+                    Ok(Some(resp)) => {
+                        println!("{:?}", resp);
+                    }
+                    Ok(None) => {
+                        info!("服务器关闭了连接");
+                        break;
+                    }
+                    Err(e) => {
+                        error!("读取响应失败: {}", e);
+                        break;
+                    }
+                }
             }
         }
     }

@@ -1,0 +1,16 @@
+commit 6182c7515166845efd365bcdd2b2414ae6bdf119
+Author: Akanyi <tong1.10@qq.com>
+Date:   Tue Feb 3 23:32:01 2026 +0800
+
+    Refactor Plugin System to use PluginManager and TwinzKV
+
+commit 7b26bdf1cb9226828e9b5c8a6620f60a4d5cc8cf
+Author: Akanyi <tong1.10@qq.com>
+Date:   Tue Feb 3 15:34:44 2026 +0800
+
+    chore: prepare for v0.1.0 release
+    
+    - Rename binary executable to `twinz`
+    - Add GitHub Actions release workflow
+    - Set default log level to `info`
+    - Update README usage instructions

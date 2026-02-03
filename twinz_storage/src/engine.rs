@@ -289,13 +289,13 @@ impl BitCask {
         Ok(value)
     }
     /// 执行 Compaction 操作
-    /// 1. 找出所有旧文件
-    /// 2. 迭代读取所有条目
-    /// 3. 如果条目是最新的 (exists in KeyDir same location)，写入新的 merge 文件
-    /// 4. 更新 KeyDir 指向新位置
-    /// 5. 删除旧文件
+    /// 找出所有旧文件
+    /// 迭代读取所有条目
+    /// 如果条目是最新的 (exists in KeyDir same location)，写入新的 merge 文件
+    /// 更新 KeyDir 指向新位置
+    /// 删除旧文件
     pub async fn compact(&self) -> Result<(), StorageError> {
-        // Find files to compact (All except active)
+        // 找出需要 Compact 的文件 (除了当前活跃文件)
         let files_to_compact: Vec<u32> = {
             let mut files = vec![];
             let mut read_dir = tokio::fs::read_dir(&self.dir).await?;

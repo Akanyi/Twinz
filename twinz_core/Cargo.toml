@@ -6,9 +6,10 @@ edition = "2021"
 [dependencies]
 twinz_storage = { workspace = true }
 twinz_transport = { workspace = true }
-twinz_plugin = { workspace = true }
+# twinz_plugin dependency removed to break cycle
 tokio = { workspace = true }
 log = { workspace = true }
+async-trait = { workspace = true }
 thiserror = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -20,7 +20,7 @@ impl TwinzTransport for TwinzUnixTransport {
     ) -> Result<Box<dyn TwinzListener<Stream = Self::Stream>>> {
         let path = addr.resolve();
         // 确保父目录存在？
-        // UDS bind 通常要求文件不存在，或者我们需要 unlink 它。
+        // UDS bind 通常要求文件不存在，或需要 unlink 它。
         if path.exists() {
             std::fs::remove_file(&path).ok();
         }
