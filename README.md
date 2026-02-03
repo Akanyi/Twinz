@@ -63,7 +63,7 @@ cargo run --bin twinz -- Compact --storage-dir ./data
 
 ```mermaid
 graph TD
-    Client[Client (CLI)] -->|Named Pipe / ValueCodec| Transport
+    Client["Client (CLI)"] -->|Named Pipe / ValueCodec| Transport
 
     subgraph Twinz Server
         Transport[TwinzTransport] -->|Stream| Kernel
@@ -71,7 +71,7 @@ graph TD
 
         Plugin -->|Get/Put| Storage[BitCask Storage]
 
-        Storage -->|Read/Write| Disk[(Data Files)]
+        Storage -->|Read/Write| "Disk[(Data Files)"]
         Storage -->|Manage| KeyDir[In-Memory Index]
     end
 ```
