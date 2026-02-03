@@ -6,11 +6,13 @@
 
 ## 🚀 Features
 
-- **BitCask Storage**: Log-structured, persistent key-value storage with O(1) read latency (in-memory KeyDir).
-- **Transport Agnostic**: Built on `async-trait`, currently supporting efficient **Windows Named Pipes** (Unix Domain Sockets on Linux/macOS supported).
-- **Dynamic Typing**: Native support for complex data types (Arrays, Maps) via `ValueCodec`, enabling JSON-like interactions instead of raw bytes.
-- **Microkernel Architecture**: The core is minimal; functionality is extended via Plugins.
-- **Compaction**: Supports manual or background garbage collection (Compaction) to reclaim disk space.
+- **BitCask Storage**: Log-structured, persistent key-value storage with O(1) read latency.
+- **Transport Agnostic**: Platform-agnostic (Named Pipes on Windows, UDS on Unix).
+- **Dynamic Typing**: JSON-like protocol (`ValueCodec`) supporting complex data types.
+- **Microkernel Architecture**:
+  - **Built-in KV**: Native, high-performance Key-Value logic.
+  - **Wasm Plugins**: Sandboxed execution via `wasmtime` with Host Function access (`db_put`).
+- **Compaction**: Supports manual or background garbage collection.
 
 ## 🛠️ Getting Started
 
@@ -43,12 +45,22 @@ cargo run --bin twinz -- server --name twinz_default --sync-mode interval --sync
 cargo run --bin twinz -- server --name twinz_default --sync-mode always
 ```
 
-#### 2. Client Demo
+#### 2. Client Demo (Interactive REPL)
 
-The built-in client demonstrates the **Duck Typing** capabilities by sending structured commands (`["SET", key, value]`):
+Connect to the server and enter the interactive command loop:
 
 ```bash
-cargo run --bin twinz -- client --name twinz_default
+twinz client --name twinz_default
+```
+
+Once connected, you can type commands:
+
+```text
+twinz> SET mykey "Hello World"
+Response: String("OK")
+twinz> GET mykey
+Response: String("Hello World")
+twinz> EXIT
 ```
 
 #### 3. Storage Compaction
@@ -80,8 +92,10 @@ graph TD
 
 - [x] **Core**: Kernel, Transport, and Duck Typing System.
 - [x] **Storage**: BitCask Engine with Sync & Compaction.
-- [ ] **Plugin System**: Dynamic loading of native plugins (DLL).
-- [ ] **Scripting**: WASM runtime integration.
+- [x] **Plugin System**:
+  - [x] Native Built-in KV Plugin.
+  - [x] WASM Runtime Integration (`wasmtime` + WASI).
+- [ ] **SDK**: Guest SDK for Rust/AssemblyScript.
 
 ## 📄 License
 
