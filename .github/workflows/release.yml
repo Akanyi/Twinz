@@ -49,13 +49,13 @@ jobs:
 
       - name: Upload Lite Asset
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            twinz-lite-x86_64-unknown-linux-gnu.tar.gz
+          # Note: softprops/action-gh-release does not require asset_content_type
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./twinz-lite-x86_64-unknown-linux-gnu.tar.gz
-          asset_name: twinz-lite-x86_64-unknown-linux-gnu.tar.gz
       - name: Build and Package Lite Version (Windows)
         if: matrix.target == 'x86_64-pc-windows-msvc'
         run: |
@@ -65,11 +65,10 @@ jobs:
 
       - name: Upload Lite Asset (Windows)
         if: matrix.target == 'x86_64-pc-windows-msvc'
-        uses: actions/upload-release-asset@v1
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            twinz-lite-x86_64-pc-windows-msvc.zip
+          # Note: softprops/action-gh-release does not require asset_content_type
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./twinz-lite-x86_64-pc-windows-msvc.zip
-          asset_name: twinz-lite-x86_64-pc-windows-msvc.zip
-          asset_content_type: application/zip
