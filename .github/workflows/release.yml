@@ -40,14 +40,36 @@ jobs:
           target: ${{ matrix.target }}
           token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Build Lite Version (No Built-in KV)
-        if: matrix.target == 'x86_64-unknown-linux-gnu' # Only build lite on Linux to save time
-        run: cargo build --release --no-default-features --bin twinz
-        
-      - name: Rename and Upload Lite
+      - name: Build and Package Lite Version
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
+          cargo build --release --no-default-features --bin twinz
           mv target/release/twinz twinz-lite
-        # Automated upload for lite might require manual asset/upload action usage since upload-rust-binary-action matches bin name.
-        # We'll skip uploading lite for now or use a separate step if strictly required.
-        # Just verifying it builds is enough for "infrastructure support".
+          tar -czf twinz-lite-x86_64-unknown-linux-gnu.tar.gz twinz-lite
+
+      - name: Upload Lite Asset
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./twinz-lite-x86_64-unknown-linux-gnu.tar.gz
+          asset_name: twinz-lite-x86_64-unknown-linux-gnu.tar.gz
+      - name: Build and Package Lite Version (Windows)
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        run: |
+          cargo build --release --no-default-features --bin twinz
+          mv target/release/twinz.exe twinz-lite.exe
+          7z a twinz-lite-x86_64-pc-windows-msvc.zip twinz-lite.exe
+
+      - name: Upload Lite Asset (Windows)
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./twinz-lite-x86_64-pc-windows-msvc.zip
+          asset_name: twinz-lite-x86_64-pc-windows-msvc.zip
+          asset_content_type: application/zip

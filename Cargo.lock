@@ -1824,6 +1824,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "twinz_core",
  "twinz_storage",
  "twinz_transport",
