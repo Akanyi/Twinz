@@ -1,6 +1,8 @@
-# Twinz
+# Twinz <img src="Twinz.png" height="30"/>
 
 > A high-performance distributed Key-Value store written in Rust.
+
+English | [中文](https://github.com/Akanyi/Twinz/blob/main/docs/README-zh.md)
 
 **Twinz** is a microkernel-based KV server featuring a pluggable architecture, legacy-compatible BitCask storage, and a dynamic "Duck Typing" protocol. designed to be modular, fast, and easy to extend.
 
@@ -95,7 +97,7 @@ graph TD
 - [x] **Plugin System**:
   - [x] Native Built-in KV Plugin.
   - [x] WASM Runtime Integration (`wasmtime` + WASI).
-- [ ] **SDK**: Guest SDK for Rust/AssemblyScript.
+- [ ] **SDK**: Client SDK for Rust/Python.
 
 ## 📄 License
 
