@@ -7,6 +7,8 @@ use twinz_plugin::Plugin;
 use twinz_storage::{BitCask, BitCaskOptions, SyncStrategy};
 use twinz_transport::{TwinzAddress, TwinzStream, TwinzTransport};
 
+mod config;
+
 #[derive(Clone, Copy, Debug, ValueEnum)]
 enum CliSyncMode {
     Always,
@@ -26,20 +28,24 @@ enum Commands {
     /// 启动 Twinz 服务器
     Server {
         /// 管道名称或地址
-        #[arg(short, long, default_value = "twinz_default")]
-        name: String,
+        #[arg(short, long)]
+        name: Option<String>,
 
         /// 存储目录
-        #[arg(short, long, default_value = "./data")]
-        storage_dir: String,
+        #[arg(short, long)]
+        storage_dir: Option<String>,
 
         /// 同步模式: 'always', 'interval', 'os'
-        #[arg(long, value_enum, default_value_t = CliSyncMode::Os)]
-        sync_mode: CliSyncMode,
+        #[arg(long, value_enum)]
+        sync_mode: Option<CliSyncMode>,
 
         /// 同步间隔 (仅在 'interval' 模式下有效)
-        #[arg(long, default_value_t = 1)]
-        sync_interval: u64,
+        #[arg(long)]
+        sync_interval: Option<u64>,
+
+        /// 插件目录
+        #[arg(long)]
+        plugin_dir: Option<String>,
     },
     /// 压缩存储 (合并旧文件)
     Compact {
@@ -72,26 +78,57 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             storage_dir,
             sync_mode,
             sync_interval,
+            plugin_dir,
         } => {
+            // 1. 加载 Config File
+            let mut file_configs = config::parse_twinzfile("TwinzFile").unwrap_or_default();
+            // 简单起见，我们取第一个 Server Block，或者如果没有 Block 就默认 default
+            let file_config = if !file_configs.is_empty() {
+                file_configs.remove(0)
+            } else {
+                config::ServerConfig::default()
+            };
+
+            // 2. Merge Config (CLI > File > Default)
+            let final_name = name.or(Some(file_config.name)).unwrap();
+            let final_storage = storage_dir
+                .or(file_config.storage_dir)
+                .unwrap_or("./data".to_string());
+            let final_plugin_dir = plugin_dir
+                .or(file_config.plugin_dir)
+                .unwrap_or("./plugins".to_string());
+
+            let final_sync_mode_str = match sync_mode {
+                Some(m) => match m {
+                    CliSyncMode::Always => "always".to_string(),
+                    CliSyncMode::Interval => "interval".to_string(),
+                    CliSyncMode::Os => "os".to_string(),
+                },
+                None => file_config.sync_mode.unwrap_or("os".to_string()),
+            };
+
+            let final_sync_interval = sync_interval.or(file_config.sync_interval).unwrap_or(1);
+
             info!("Starting Twinz Server...");
-            info!("Storage: {}", storage_dir);
-            info!("Address: twinz://{}", name);
+            info!("Storage: {}", final_storage);
+            info!("Address: twinz://{}", final_name);
+            info!("Plugin Dir: {}", final_plugin_dir);
             info!(
-                "Sync Strategy: {:?} (Interval: {}s)",
-                sync_mode, sync_interval
+                "Sync Strategy: {} (Interval: {}s)",
+                final_sync_mode_str, final_sync_interval
             );
 
             // 初始化存储
-            let strategy = match sync_mode {
-                CliSyncMode::Always => SyncStrategy::Always,
-                CliSyncMode::Interval => SyncStrategy::Interval(sync_interval),
-                CliSyncMode::Os => SyncStrategy::None,
+            let strategy = match final_sync_mode_str.as_str() {
+                "always" => SyncStrategy::Always,
+                "interval" => SyncStrategy::Interval(final_sync_interval),
+                _ => SyncStrategy::None,
             };
 
             let options = BitCaskOptions {
                 sync_strategy: strategy,
             };
-            let storage = BitCask::open(&storage_dir, options).await?;
+            let storage = BitCask::open(&final_storage, options).await?;
             let storage = Arc::new(storage);
 
             // 初始化 Kernel
@@ -104,35 +141,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let transport = twinz_transport::unix::TwinzUnixTransport;
 
             // 地址
-            let addr = TwinzAddress::Namespace(name);
+            let addr = TwinzAddress::Namespace(final_name);
 
             // 初始化 PluginManager
             let mut plugin_manager = twinz_plugin::loader::PluginManager::new();
 
-            // 注册静态加载器 (内置插件)
-            let mut static_loader = twinz_plugin::static_loader::StaticPluginLoader::new();
+            // 1. 注册 Wasm 加载器 (优先)
+            let wasm_loader = twinz_plugin::wasm_loader::WasmPluginLoader::new(&final_plugin_dir);
+            match wasm_loader {
+                Ok(loader) => {
+                    plugin_manager.register_loader(Box::new(loader));
+                }
+                Err(e) => {
+                    error!("Failed to initialize WasmPluginLoader: {}", e);
+                }
+            }
 
-            // 如果你以后想把 SimplePlugin 删掉，这里就不用引用了。
-            // 现在我们用 TwinzKV (via static_loader) 作为默认插件。
+            // 2. 注册静态加载器 (内置插件)
+            let mut static_loader = twinz_plugin::static_loader::StaticPluginLoader::new();
             let static_loader = Box::new(static_loader);
             plugin_manager.register_loader(static_loader);
 
             // 加载默认插件
-            let plugin_name = "kv"; // 或者 "simple"
+            let plugin_name = "kv";
             let plugin = plugin_manager
                 .get_plugin(plugin_name)
                 .expect("Failed to load default 'kv' plugin");
-
-            // 运行
-            // kernel.run 需要 Arc<P> where P: Plugin.
-            // Box<dyn Plugin> 也是 Plugin吗？ Kernel 定义是 Arc<P>。 P 必须是 Sized?
-            // Kernel run 定义: pub async fn run<T, P>(..., plugin: Arc<P>)
-            // 我们的 plugin 是 Arc<dyn Plugin>.
-            // 所以 P = dyn Plugin.
-            // 只要 dyn Plugin implemented Plugin.
-            // wait, async trait dynamic dispatch issue?
-            // "The trait `Plugin` cannot be made into an object". async_trait 宏会处理这个吗？
-            // async_trait 生成的方法返回 BoxFuture，应该是 Object Safe 的。
 
             kernel.run(transport, addr, plugin).await?;
         }
@@ -153,6 +187,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             #[cfg(unix)]
             let transport = twinz_transport::unix::TwinzUnixTransport;
 
+            // 地址
             let addr = TwinzAddress::Namespace(name);
             let mut stream = transport.connect(&addr).await?;
             info!("已连接！(输入 'EXIT' 或 'QUIT' 退出)");

@@ -11,27 +11,43 @@ use wasmtime::*;
 
 pub struct WasmPluginLoader {
     engine: Engine,
+    plugin_dir: std::path::PathBuf,
 }
 
 impl WasmPluginLoader {
-    pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn new<P: AsRef<std::path::Path>>(
+        plugin_dir: P,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut config = Config::new();
         config.async_support(true); // 启用异步支持
         let engine = Engine::new(&config)?;
-        Ok(Self { engine })
+        Ok(Self {
+            engine,
+            plugin_dir: plugin_dir.as_ref().to_path_buf(),
+        })
     }
 }
 
 impl PluginLoader for WasmPluginLoader {
     fn can_load(&self, name: &str) -> bool {
-        name.ends_with(".wasm")
+        if name.ends_with(".wasm") {
+            return true;
+        }
+        // Check if plugin_dir/name.wasm exists
+        let path = self.plugin_dir.join(format!("{}.wasm", name));
+        path.exists()
     }
 
     fn load(
         &self,
         name: &str,
     ) -> Result<Arc<dyn Plugin>, Box<dyn std::error::Error + Send + Sync>> {
-        let module_bytes = std::fs::read(name)?;
+        let module_bytes = if name.ends_with(".wasm") {
+            std::fs::read(name)?
+        } else {
+            let path = self.plugin_dir.join(format!("{}.wasm", name));
+            std::fs::read(path)?
+        };
         let module = Module::new(&self.engine, &module_bytes)?;
 
         let plugin: Arc<dyn Plugin> = Arc::new(WasmPlugin {
